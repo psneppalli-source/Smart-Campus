@@ -1,9 +1,11 @@
 import { AfterViewInit, Component, ElementRef, OnDestroy, viewChild } from '@angular/core';
 import { RouterLink } from '@angular/router';
 
+interface P3 { x: number; y: number; z: number; c: string; r: number; }
+
 /**
- * Public home page: a human head in light with an AI brain inside (canvas, no libraries), preview cards that tilt
- * with the pointer, and the main features. Still for people who prefer reduced motion.
+ * Public home page: a 3D network of students (canvas, no libraries) behind the headline, floating 3D preview
+ * cards that follow the pointer, and the main features. Still for people who prefer reduced motion.
  */
 @Component({
   selector: 'app-home-page',
@@ -34,13 +36,13 @@ import { RouterLink } from '@angular/router';
     .ctas{display:flex;gap:12px;flex-wrap:wrap} .trust{display:flex;gap:18px;flex-wrap:wrap;margin-top:26px;color:#8ea4bf;font-size:13px}
     .trust span{display:inline-flex;align-items:center;gap:6px}
 
-    .stage{position:relative;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;perspective:1100px}
-    .float{position:relative;border-radius:18px;padding:16px 18px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.14);
+    .stage{position:relative;height:460px;perspective:1100px}
+    .float{position:absolute;border-radius:18px;padding:16px 18px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.14);
       backdrop-filter:blur(10px);box-shadow:0 30px 60px rgba(0,0,0,.35);transform-style:preserve-3d;transition:transform .25s ease-out}
-    .f1{animation:bob 7s ease-in-out infinite} .f2{animation:bob 8s ease-in-out -2s infinite}
-    .f3{grid-column:1 / -1;animation:bob 9s ease-in-out -4s infinite}
+    .f1{left:6%;top:10%;width:280px;animation:bob 7s ease-in-out infinite}
+    .f2{right:2%;top:42%;width:250px;animation:bob 8s ease-in-out -2s infinite}
+    .f3{left:16%;bottom:2%;width:270px;animation:bob 9s ease-in-out -4s infinite}
     @keyframes bob{0%,100%{translate:0 0}50%{translate:0 -12px}}
-    .brain-slot{grid-column:1 / -1;height:clamp(300px,52vh,440px)}
     .k{font-size:12px;color:#9fb4c9} .big{font-size:40px;font-weight:700;color:#fff;letter-spacing:-.02em} .up{color:#7fe0a0;font-size:13px;font-weight:600}
     .pill{display:inline-block;font-size:11.5px;padding:2px 9px;border-radius:999px;margin:6px 6px 0 0;background:rgba(127,224,220,.16);color:#bdeeea}
     .pill.red{background:rgba(255,120,110,.16);color:#ffb3ab}
@@ -73,9 +75,9 @@ import { RouterLink } from '@angular/router';
     @media (max-width:900px){
       .hero{min-height:auto;padding-top:104px;padding-bottom:56px} .hero-grid{grid-template-columns:1fr;gap:32px}
       .nav a.link{display:none} .nav{background:rgba(7,19,31,.88);backdrop-filter:blur(10px)}
-      .stage{perspective:none}
-      .float{transform:none !important;animation:none}
-      .brain-slot{height:clamp(240px,52vw,340px)}
+      .stage{height:auto;perspective:none;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+      .float{position:static;width:auto;transform:none !important;animation:none}
+      .f3{grid-column:1 / -1}
       .steps{grid-template-columns:1fr}
       section.block{padding-top:56px;padding-bottom:56px}
     }
@@ -118,7 +120,6 @@ import { RouterLink } from '@angular/router';
           <div class="trust"><span>🔒 Two-step sign-in</span><span>👥 Role-based access</span><span>🛡️ No names sent to AI</span></div>
         </div>
         <div class="stage" aria-hidden="true">
-          <div class="brain-slot" #slot></div>
           <div class="float f1" [style.transform]="t(1)">
             <div class="k">Success Score · Sep 2026</div>
             <div class="row3"><span class="big">72.4</span><span class="up">▲ +6.2 since April</span></div>
@@ -171,7 +172,6 @@ import { RouterLink } from '@angular/router';
 })
 export class HomePage implements AfterViewInit, OnDestroy {
   private cv = viewChild.required<ElementRef<HTMLCanvasElement>>('cv');
-  private slot = viewChild.required<ElementRef<HTMLElement>>('slot');
   private raf = 0;
   private io?: IntersectionObserver;
   private mx = 0; private my = 0;
@@ -207,178 +207,50 @@ export class HomePage implements AfterViewInit, OnDestroy {
   }
   ngOnDestroy() { cancelAnimationFrame(this.raf); this.io?.disconnect(); }
 
-  /**
-   * A human head in profile, drawn in light, with an AI brain inside: the head is filled with points, the brain's
-   * links fire signals, circuit lines carry signals in from an "AI" chip, and a scan line sweeps across the face.
-   * Coordinates are in a unit box (x 0..1, y 0..1.2) with the face looking right; it is mirrored to look at the text.
-   */
+  /** A slowly turning sphere of students (points coloured by band) with links between near neighbours. */
   private draw() {
     const canvas = this.cv().nativeElement;
     const ctx = canvas.getContext('2d'); if (!ctx) return;
-    type V = [number, number];
-    const head: V[][] = [  // start point, then cubic Bezier segments [c1, c2, end]
-      [[0.33, 1.18]],
-      [[0.33, 1.05], [0.30, 0.98], [0.24, 0.90]], [[0.10, 0.80], [0.06, 0.62], [0.08, 0.46]],
-      [[0.10, 0.20], [0.30, 0.04], [0.52, 0.05]], [[0.72, 0.06], [0.84, 0.18], [0.85, 0.36]],
-      [[0.86, 0.40], [0.88, 0.42], [0.87, 0.45]], [[0.86, 0.48], [0.88, 0.52], [0.93, 0.58]],
-      [[0.95, 0.61], [0.93, 0.64], [0.88, 0.64]], [[0.87, 0.66], [0.90, 0.69], [0.89, 0.71]],
-      [[0.88, 0.73], [0.86, 0.73], [0.87, 0.75]], [[0.89, 0.77], [0.88, 0.80], [0.85, 0.81]],
-      [[0.84, 0.84], [0.86, 0.88], [0.82, 0.91]], [[0.76, 0.95], [0.68, 0.93], [0.64, 0.95]],
-      [[0.62, 1.02], [0.63, 1.10], [0.64, 1.18]],
-    ];
-    const trace = (c: CanvasRenderingContext2D, m: (p: V) => V) => {
-      c.beginPath(); c.moveTo(...m(head[0][0]));
-      for (const seg of head.slice(1)) c.bezierCurveTo(...m(seg[0]), ...m(seg[1]), ...m(seg[2]));
-      c.closePath();
-    };
-    // points that fill the head (sampled once on a small offscreen canvas)
-    const off = document.createElement('canvas').getContext('2d');
-    const fill: V[] = [];
-    const brainC: V = [0.41, 0.33], brainR: V = [0.25, 0.2];
-    const inBrain = (x: number, y: number) => ((x - brainC[0]) / brainR[0]) ** 2 + ((y - brainC[1]) / brainR[1]) ** 2 < 1;
-    if (off) {
-      trace(off, (p) => [p[0] * 1000, p[1] * 1000]);
-      for (let y = 0.02; y < 1.18; y += 0.021) for (let x = 0.04; x < 0.98; x += 0.021) {
-        const jx = x + (Math.sin(x * 91 + y * 37) * 0.5) * 0.012, jy = y + (Math.cos(x * 53 - y * 71) * 0.5) * 0.012;
-        if (off.isPointInPath(jx * 1000, jy * 1000) && !inBrain(jx, jy)) fill.push([jx, jy]);
-      }
+    const colours = ['#7fe0dc', '#7fe0dc', '#5aa9ff', '#5aa9ff', '#ffc04d', '#ff7a6e'];
+    const N = 260, pts: P3[] = [];
+    for (let i = 0; i < N; i++) {  // Fibonacci sphere: evenly spread points
+      const y = 1 - (i / (N - 1)) * 2, rad = Math.sqrt(1 - y * y), th = Math.PI * (3 - Math.sqrt(5)) * i;
+      pts.push({ x: Math.cos(th) * rad, y, z: Math.sin(th) * rad, c: colours[i % colours.length], r: 1.2 + (i % 3) * 0.6 });
     }
-    // the brain: points in a folded oval, linked to near neighbours
-    const brain: V[] = [];
-    for (let i = 0; i < 170; i++) {
-      const r = Math.sqrt((i + 0.5) / 170), t = i * Math.PI * (3 - Math.sqrt(5));
-      brain.push([brainC[0] + Math.cos(t) * r * brainR[0] * 0.95, brainC[1] + Math.sin(t) * r * brainR[1] * 0.95]);
+    const near: [number, number][] = [];
+    for (let i = 0; i < N; i++) for (let j = i + 1; j < N; j++) {
+      const d = (pts[i].x - pts[j].x) ** 2 + (pts[i].y - pts[j].y) ** 2 + (pts[i].z - pts[j].z) ** 2;
+      if (d < 0.045) near.push([i, j]);
     }
-    const links: [number, number][] = [], adj: number[][] = brain.map(() => []);
-    for (let i = 0; i < brain.length; i++) for (let j = i + 1; j < brain.length; j++) {
-      if ((brain[i][0] - brain[j][0]) ** 2 + (brain[i][1] - brain[j][1]) ** 2 < 0.0019) { adj[i].push(links.length); adj[j].push(links.length); links.push([i, j]); }
-    }
-    const glow = new Float32Array(brain.length);
-    // circuit lines from outside the head into the brain; the middle one starts at the AI chip
-    const circuits: V[][] = [
-      [[0.03, 0.17], [0.20, 0.17], [0.20, 0.26], [0.30, 0.26]],
-      [[-0.13, 0.40], [0.06, 0.40], [0.20, 0.40], [0.27, 0.36]],
-      [[0.01, 0.62], [0.17, 0.62], [0.17, 0.47], [0.30, 0.45]],
-      [[0.26, -0.03], [0.44, -0.03], [0.44, 0.16]],
-      [[0.62, -0.02], [0.56, 0.06], [0.52, 0.16]],
-    ];
-    const lens = circuits.map((c) => c.slice(1).reduce((s, p, i) => s + Math.hypot(p[0] - c[i][0], p[1] - c[i][1]), 0));
-    const along = (c: number, f: number): V => {  // a point a fraction f of the way along circuit c
-      let d = f * lens[c]; const pts = circuits[c];
-      for (let i = 1; i < pts.length; i++) {
-        const l = Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
-        if (d <= l) return [pts[i - 1][0] + (pts[i][0] - pts[i - 1][0]) * d / l, pts[i - 1][1] + (pts[i][1] - pts[i - 1][1]) * d / l];
-        d -= l;
-      }
-      return pts[pts.length - 1];
-    };
-    const wires = circuits.map((_, c) => ({ c, f: Math.random() }));
-    type Pulse = { l: number; from: number; t: number; hops: number; c: string };
-    const colours = ['#7fe0dc', '#a9b8ff', '#ffffff', '#ffc04d'];
-    const nearest = (p: V) => brain.reduce((best, q, i) => ((q[0] - p[0]) ** 2 + (q[1] - p[1]) ** 2 < (brain[best][0] - p[0]) ** 2 + (brain[best][1] - p[1]) ** 2 ? i : best), 0);
-    const ends = circuits.map((c) => nearest(c[c.length - 1]));
-    const spawn = (at?: number): Pulse => {
-      const node = at ?? (Math.random() * brain.length) | 0, ls = adj[node];
-      const l = ls.length ? ls[(Math.random() * ls.length) | 0] : (Math.random() * links.length) | 0;
-      return { l, from: links[l][0] === node || !ls.length ? links[l][0] : links[l][1], t: 0, hops: 5 + ((Math.random() * 8) | 0), c: colours[(Math.random() * colours.length) | 0] };
-    };
-    const pulses: Pulse[] = links.length ? Array.from({ length: 22 }, () => spawn()) : [];
-    let clock = 0;
+    let a = 0, b = 0.35;
     const frame = () => {
       const dpr = Math.min(2, window.devicePixelRatio || 1);
       const w = canvas.clientWidth, h = canvas.clientHeight;
       if (canvas.width !== w * dpr || canvas.height !== h * dpr) { canvas.width = w * dpr; canvas.height = h * dpr; }
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, w, h);
-      // the head is drawn over its own space in the page, above the preview cards
-      const cr = canvas.getBoundingClientRect(), sr = this.slot().nativeElement.getBoundingClientRect();
-      const S = Math.min(sr.height / 1.25, sr.width / 1.3);
-      const cx = sr.left - cr.left + sr.width / 2 - S * 0.12, cy = sr.top - cr.top + sr.height / 2 + S * 0.04;
-      clock += this.reduce ? 0 : 1;
-      const bob = Math.sin(clock * 0.02) * 4, k = Math.max(0.6, Math.min(1, S / 420));
-      // mirror so the face looks left, towards the headline; inner layers move a little more with the pointer (depth)
-      const at = (p: V, depth = 0): V => [cx + (0.5 - p[0]) * S + this.mx * depth * 14, cy + (p[1] - 0.6) * S + bob + this.my * depth * 10];
-      // soft glow behind the head
-      const gc = at(brainC, 1), g = ctx.createRadialGradient(gc[0], gc[1], 0, gc[0], gc[1], S * 0.7);
-      g.addColorStop(0, 'rgba(20,163,163,0.20)'); g.addColorStop(1, 'rgba(20,163,163,0)');
-      ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
-      // head: points, then the outline drawn in light
-      const scan = 0.35 + ((clock * 0.004) % 1) * 0.75;               // the scan line moves from the back of the head to the face
-      for (const p of fill) {
-        const near = Math.max(0, 1 - Math.abs(p[0] - scan) / 0.05);
-        const q = at(p, 0.3); ctx.globalAlpha = (0.22 + near * 0.6) * Math.min(1, (1.18 - p[1]) / 0.22); ctx.fillStyle = near > 0.2 ? '#ffffff' : '#5aa9ff';
-        ctx.beginPath(); ctx.arc(q[0], q[1], (1 + near * 0.8) * k, 0, Math.PI * 2); ctx.fill();
+      const narrow = w < 900;  // phones and tablets: a smaller, dimmer globe above the text so it stays readable
+      const R = narrow ? Math.min(w * 0.42, 260) : Math.min(w, h) * 0.36, cx = narrow ? w * 0.78 : w * 0.70, cy = narrow ? Math.min(h * 0.2, 220) : h * 0.52;
+      const dim = narrow ? 0.3 : 1;
+      a += this.reduce ? 0 : 0.0022; b += ((0.35 + this.my * 0.5) - b) * 0.04;
+      const ay = a + this.mx * 0.6, ca = Math.cos(ay), sa = Math.sin(ay), cb = Math.cos(b), sb = Math.sin(b);
+      const proj = pts.map((p) => {
+        const x1 = p.x * ca - p.z * sa, z1 = p.x * sa + p.z * ca;
+        const y2 = p.y * cb - z1 * sb, z2 = p.y * sb + z1 * cb;
+        const s = 2.4 / (2.4 + z2);
+        return { x: cx + x1 * R * s, y: cy + y2 * R * s, z: z2, s };
+      });
+      ctx.lineWidth = 0.6;
+      for (const [i, j] of near) {
+        const p = proj[i], q = proj[j], depth = (2 - (p.z + q.z) / 2) / 3;
+        ctx.strokeStyle = `rgba(127,224,220,${((0.05 + depth * 0.22) * dim).toFixed(3)})`;
+        ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y); ctx.stroke();
       }
+      proj.map((p, i) => ({ ...p, i })).sort((u, v) => v.z - u.z).forEach((p) => {
+        const alpha = 0.35 + (1 - (p.z + 1) / 2) * 0.65;
+        ctx.globalAlpha = alpha * dim; ctx.fillStyle = pts[p.i].c;
+        ctx.beginPath(); ctx.arc(p.x, p.y, pts[p.i].r * p.s * 1.6, 0, Math.PI * 2); ctx.fill();
+      });
       ctx.globalAlpha = 1;
-      ctx.save(); ctx.shadowColor = 'rgba(127,224,220,0.9)'; ctx.shadowBlur = 14 * k;
-      const n0 = at([0.5, 0.9]), n1 = at([0.5, 1.18]), ng = ctx.createLinearGradient(n0[0], n0[1], n1[0], n1[1]);  // the neck fades out
-      ng.addColorStop(0, 'rgba(127,224,220,0.95)'); ng.addColorStop(1, 'rgba(127,224,220,0)');
-      ctx.strokeStyle = ng; ctx.lineWidth = 2 * k; trace(ctx, (p) => at(p)); ctx.stroke(); ctx.restore();
-      // eye and ear
-      ctx.strokeStyle = 'rgba(127,224,220,0.7)'; ctx.lineWidth = 1.4 * k;
-      const e1 = at([0.74, 0.46]), e2 = at([0.80, 0.47]), em = at([0.77, 0.445]), en = at([0.77, 0.485]);
-      ctx.beginPath(); ctx.moveTo(...e1); ctx.quadraticCurveTo(em[0], em[1], e2[0], e2[1]); ctx.quadraticCurveTo(en[0], en[1], e1[0], e1[1]); ctx.stroke();
-      const r1 = at([0.44, 0.50]), r2 = at([0.36, 0.52]), r3 = at([0.37, 0.64]), r4 = at([0.44, 0.63]);
-      ctx.beginPath(); ctx.moveTo(...r1); ctx.bezierCurveTo(r2[0], r2[1], r3[0], r3[1], r4[0], r4[1]); ctx.stroke();
-      // scan line
-      const s1 = at([scan, 0.02], 0.3), s2 = at([scan, 1.16], 0.3), sg = ctx.createLinearGradient(s1[0], s1[1], s2[0], s2[1]);
-      sg.addColorStop(0, 'rgba(127,224,220,0)'); sg.addColorStop(0.5, 'rgba(127,224,220,0.35)'); sg.addColorStop(1, 'rgba(127,224,220,0)');
-      ctx.strokeStyle = sg; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(...s1); ctx.lineTo(...s2); ctx.stroke();
-      // circuit lines and the AI chip
-      ctx.lineWidth = 1.6 * k; ctx.strokeStyle = 'rgba(169,184,255,0.55)';
-      for (const c of circuits) { ctx.beginPath(); c.forEach((p, i) => (i ? ctx.lineTo(...at(p, 1)) : ctx.moveTo(...at(p, 1)))); ctx.stroke(); }
-      ctx.fillStyle = '#a9b8ff';
-      for (const c of circuits) { const q = at(c[0], 1); ctx.beginPath(); ctx.arc(q[0], q[1], 3.2 * k, 0, Math.PI * 2); ctx.fill(); }
-      const chip = at([-0.2, 0.40], 1), cs = 0.13 * S;
-      ctx.save(); ctx.shadowColor = 'rgba(111,91,214,0.9)'; ctx.shadowBlur = 18 * k;
-      ctx.fillStyle = '#16233a'; ctx.strokeStyle = '#a9b8ff'; ctx.lineWidth = 1.6 * k;
-      ctx.beginPath(); ctx.roundRect(chip[0] - cs / 2, chip[1] - cs / 2, cs, cs, cs * 0.18); ctx.fill(); ctx.stroke(); ctx.restore();
-      ctx.strokeStyle = 'rgba(169,184,255,0.7)'; ctx.lineWidth = 1.2 * k;
-      for (let i = -1; i <= 1; i++) for (const [dx, dy] of [[0, -1], [0, 1], [-1, 0]] as V[]) {
-        const o = i * cs * 0.28, ax = chip[0] + (dx ? dx * cs / 2 : o), ay = chip[1] + (dy ? dy * cs / 2 : o);
-        ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(ax + dx * cs * 0.16, ay + dy * cs * 0.16); ctx.stroke();
-      }
-      ctx.fillStyle = '#e8f1f8'; ctx.font = `700 ${Math.round(cs * 0.42)}px Inter, system-ui, sans-serif`;
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('AI', chip[0], chip[1] + 1);
-      // signals running along the circuits into the brain
-      ctx.globalCompositeOperation = 'lighter';
-      for (const wv of wires) {
-        const q = at(along(wv.c, wv.f), 1);
-        ctx.globalAlpha = 0.95; ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(q[0], q[1], 2.4 * k, 0, Math.PI * 2); ctx.fill();
-        ctx.globalAlpha = 0.3; ctx.fillStyle = '#a9b8ff'; ctx.beginPath(); ctx.arc(q[0], q[1], 7 * k, 0, Math.PI * 2); ctx.fill();
-        if (!this.reduce) wv.f += 0.006 + wv.c * 0.0008;
-        if (wv.f >= 1) { wv.f = 0; glow[ends[wv.c]] = 1; if (pulses.length) pulses[(Math.random() * pulses.length) | 0] = spawn(ends[wv.c]); }
-      }
-      ctx.globalCompositeOperation = 'source-over';
-      // brain: folded outline, links, points, firing signals
-      ctx.strokeStyle = 'rgba(199,155,255,0.55)'; ctx.lineWidth = 1.3 * k; ctx.beginPath();
-      for (let i = 0; i <= 120; i++) {
-        const t = (i / 120) * Math.PI * 2, r = 1 + 0.06 * Math.sin(t * 11);
-        const q = at([brainC[0] + Math.cos(t) * brainR[0] * r, brainC[1] + Math.sin(t) * brainR[1] * r], 1);
-        if (i) ctx.lineTo(...q); else ctx.moveTo(...q);
-      }
-      ctx.stroke();
-      ctx.lineWidth = 0.7; ctx.strokeStyle = 'rgba(127,224,220,0.22)';
-      for (const [i, j] of links) { ctx.beginPath(); ctx.moveTo(...at(brain[i], 1)); ctx.lineTo(...at(brain[j], 1)); ctx.stroke(); }
-      for (let i = 0; i < brain.length; i++) {
-        glow[i] *= 0.93; const q = at(brain[i], 1);
-        ctx.globalAlpha = 0.55 + glow[i] * 0.45; ctx.fillStyle = i % 4 ? '#7fe0dc' : '#c79bff';
-        ctx.beginPath(); ctx.arc(q[0], q[1], (1.7 + glow[i] * 2.6) * k, 0, Math.PI * 2); ctx.fill();
-      }
-      ctx.globalCompositeOperation = 'lighter';
-      for (let n = 0; n < pulses.length; n++) {
-        const pl = pulses[n], [i, j] = links[pl.l], to = pl.from === i ? j : i;
-        const a = at(brain[pl.from], 1), b = at(brain[to], 1), x = a[0] + (b[0] - a[0]) * pl.t, y = a[1] + (b[1] - a[1]) * pl.t;
-        ctx.globalAlpha = 0.95; ctx.fillStyle = pl.c; ctx.beginPath(); ctx.arc(x, y, 2.2 * k, 0, Math.PI * 2); ctx.fill();
-        ctx.globalAlpha = 0.25; ctx.beginPath(); ctx.arc(x, y, 6 * k, 0, Math.PI * 2); ctx.fill();
-        if (!this.reduce) pl.t += 0.07;
-        if (pl.t >= 1) {
-          glow[to] = 1;
-          const next = adj[to].filter((l) => l !== pl.l);
-          if (--pl.hops <= 0 || !next.length) pulses[n] = spawn();
-          else { pl.l = next[(Math.random() * next.length) | 0]; pl.from = to; pl.t = 0; }
-        }
-      }
-      ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
       if (!this.reduce) this.raf = requestAnimationFrame(frame);
     };
     frame();
